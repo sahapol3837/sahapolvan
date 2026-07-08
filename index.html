@@ -95,47 +95,45 @@
         <div id="tree-nodes"></div>
     </div>
 
-    <script type="module">
-        // 1. นำเข้าระบบคำนวณพิกัดที่คุณแยกไฟล์ไว้
+       <script type="module">
         import { VFT } from './family-tree-core.js';
 
-       // 1. เปลี่ยน URL ตัวแปรลิงก์ชีตใหม่ (ใช้การ Export ฟอร์แมตแทนการ Publish)
-const sheetUrl = 'https://google.com';
+        // 1. ผูกกับลิงก์ส่งออก CSV ตัวจริงที่คุณส่งมาเรียบร้อยแล้ว
+        const sheetUrl = 'https://google.com';
 
-// 2. ปรับปรุงฟังก์ชันดาวน์โหลดไฟล์ให้เสถียรและรองรับการแกะข้อความภาษาไทย
-async function fetchGoogleSheet(url) {
-    // กำหนดรายละเอียดการดึงข้อมูลไม่ให้ติดแคชของเบราว์เซอร์
-    const response = await fetch(url, { method: 'GET', cache: 'no-store' });
-    
-    if (!response.ok) {
-        throw new Error(`เซิร์ฟเวอร์ตอบกลับด้วยสถานะ: ${response.status}`);
-    }
-    
-    const text = await response.text();
-    
-    // แยกข้อมูลทีละบรรทัด และกรองบรรทัดว่างออก
-    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line !== "");
-    if (lines.length === 0) throw new Error("ไม่พบข้อมูลใดๆ ในไฟล์ที่ดาวน์โหลดมา");
+        // 2. ปรับปรุงฟังก์ชันตัวดึงข้อมูลแบบเจาะทะลุกำแพงเครือข่าย
+        async function fetchGoogleSheet(url) {
+            const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+            
+            if (!response.ok) {
+                throw new Error(`ไม่สามารถเข้าถึงตารางดึงข้อมูลได้: ${response.status}`);
+            }
+            
+            const text = await response.text();
+            
+            // แยกกลุ่มข้อมูลแต่ละแถวออกเป็นอาเรย์บรรทัด
+            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line !== "");
+            if (lines.length === 0) throw new Error("ไฟล์ตารางว่างเปล่า ไม่มีข้อมูลญาติ");
 
-    // แกะหัวตาราง (ID, Name, Father...)
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-    
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-        // ใช้ Regex เพื่อช่วยแยกคอมมาอย่างแม่นยำ ป้องกันปัญหาหากในช่องชื่อมีเว้นวรรค
-        const currentLine = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
-        const cleanedValues = currentLine.map(v => v.trim().replace(/"/g, ''));
-        
-        const rowObj = {};
-        headers.forEach((header, index) => {
-            rowObj[header] = cleanedValues[index] || "";
-        });
-        rows.push(rowObj);
-    }
-    return rows;
-}
+            // ดึงเฉพาะแถวแรกสุดมาทำเป็นหัวตารางคีย์แมป (id, name, father, mother, spouse, gender)
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                // ตัวแยกแถวอย่างละเอียด ป้องกันฟิลด์พังหากในช่องตารางมีช่องว่าง
+                const currentLine = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                if (currentLine.length < headers.length) continue;
+                
+                const rowObj = {};
+                headers.forEach((header, index) => {
+                    rowObj[header] = currentLine[index];
+                });
+                rows.push(rowObj);
+            }
+            return rows;
+        }
 
-        // ฟังก์ชันแปลงข้อมูลตาราง Excel เป็นโครงสร้าง JSON Object ที่ตรรกะ Family Echo เข้าใจ
+        // 3. ระบบแมปปิ้งสร้าง Object โครงสร้างเครือข่าย Family Echo
         function transformData(rows) {
             const familyData = {};
             
@@ -172,49 +170,44 @@ async function fetchGoogleSheet(url) {
             return familyData;
         }
 
-        // ฟังก์ชันหลักในการควบคุมหน้าจอและวาดภาพ
         async function initTree() {
             try {
-                // ดึงข้อมูลจากชีตจริง
                 const rawRows = await fetchGoogleSheet(sheetUrl);
                 const structuredData = transformData(rawRows);
                 
-                // สั่งประมวลผลตำแหน่งพิกัด (เริ่มคำนวณผังต้นไม้โดยใช้ ID: 1 "เภา" เป็นจุดเริ่มต้นรุ่นแรก)
+                // สั่งประมวลผลผังตระกูลโดยยึดรากแกนนำรุ่นที่ 1 คือ ID: 1 "เภา"
                 const layout = VFT("all", structuredData, "1", "c", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
                 
                 if (!layout) {
-                    document.getElementById('loading').innerText = "ไม่สามารถคำนวณโครงสร้างเครือญาติได้ ตรวจสอบความถูกต้องของความสัมพันธ์ในชีต";
+                    document.getElementById('loading').innerText = "โครงสร้าง if-else ไม่สามารถลากพิกัดได้ โปรดตรวจสอบความสัมพันธ์ในชีต";
                     return;
                 }
 
-                // ซ่อนข้อความโหลดดิ้ง และแสดงพื้นที่กระดาน
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('tree-container').style.display = 'block';
 
                 const nodesContainer = document.getElementById('tree-nodes');
                 const svgContainer = document.getElementById('tree-lines');
 
-                // 2. ขีดเส้นความสัมพันธ์ตามพิกัด (layout.l) ที่ได้มาจากฟังก์ชัน if-else ในไฟล์แกนหลัก
+                // บล็อกคำสั่งเรนเดอร์เส้นเชื่อมพิกัด SVG ลงหน้าจอ
                 let svgHtml = '';
                 layout.l.forEach(line => {
-                    // กำหนดสีของเส้น (สีเทาสำหรับสายเลือดทั่วไป สีแดงสำหรับความสัมพันธ์แต่งงาน)
                     const strokeColor = line.c === '#ff0000' ? '#e91e63' : '#a0aec0';
                     const strokeWidth = line.c === '#ff0000' ? '3' : '2';
-                    const strokeDash = line.c === '#ff0000' ? '4,4' : 'none'; // เส้นประสำหรับคู่สมรส
+                    const strokeDash = line.c === '#ff0000' ? '4,4' : 'none';
 
                     svgHtml += `<line x1="${line.x}" y1="${line.y}" x2="${line.x + line.w}" y2="${line.y + line.h}" 
                                      style="stroke:${strokeColor}; stroke-width:${strokeWidth}; stroke-dasharray:${strokeDash};" />`;
                 });
                 svgContainer.innerHTML = svgHtml;
 
-                // 3. วาดกล่องรายชื่อญาติ (layout.b) ตามจุดพิกัดในพื้นที่
+                // บล็อกคำสั่งปักกล่องรายชื่อญาติ (Div Nodes)
                 layout.b.forEach(box => {
                     const memberId = box.id;
                     const genderClass = structuredData[memberId]?.g === 'f' ? 'gender-f' : 'gender-m';
 
                     const div = document.createElement('div');
                     div.className = `member-box ${genderClass}`;
-                    // ปรับตำแหน่งและขนาด (บวก Margin/Offset เพื่อความสมดุลบนหน้าเว็บ)
                     div.style.left = `${box.x}px`;
                     div.style.top = `${box.y}px`;
                     div.style.width = `${box.w}px`;
@@ -232,8 +225,6 @@ async function fetchGoogleSheet(url) {
                 document.getElementById('loading').innerText = "เกิดข้อผิดพลาดในการโหลดข้อมูล: " + error.message;
             }
         }
-
-        // เริ่มต้นการทำงานเมื่อหน้าจอโหลดพร้อมเสร็จสิ้น
         window.addEventListener('DOMContentLoaded', initTree);
     </script>
 </body>
