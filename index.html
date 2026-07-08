@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบแสดงผังเครือญาติจาก Google Sheets</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fb;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        #loading {
+            font-size: 18px;
+            color: #666;
+            margin-top: 50px;
+        }
+        /* พื้นที่กระดานสำหรับวาดผังตระกูล */
+        #tree-container {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            height: 700px;
+            border: 2px dashed #ccc;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-top: 20px;
+        }
+        /* รูปแบบของกล่องรายชื่อญาติ */
+        .member-box {
+            position: absolute;
+            width: 110px;
+            height: 60px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        .member-box:hover {
+            transform: scale(1.05);
+            cursor: pointer;
+        }
+        /* สีแบ่งแยกเพศตามข้อมูล */
+        .gender-m {
+            background-color: #e3f2fd;
+            border-color: #2196f3;
+        }
+        .gender-f {
+            background-color: #fce4ec;
+            border-color: #e91e63;
+        }
+        .member-id {
+            font-size: 10px;
+            color: #888;
+            margin-top: 2px;
+        }
+        /* พื้นหลังสำหรับวาดเส้นเชื่อมโยง */
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 2500px; /* ขยายขนาดพื้นที่เพื่อรองรับผังขนาดใหญ่ */
+            height: 2500px;
+            pointer-events: none; /* ยอมให้คลิกทะลุเส้นไปโดนกล่องได้ */
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ผังลำดับวงศ์ตระกูล</h1>
+    <div id="loading">กำลังดาวน์โหลดและประมวลผลข้อมูลจาก Google Sheets...</div>
+
+    <!-- กระดานแสดงผล -->
+    <div id="tree-container" style="display: none;">
+        <!-- SVG สำหรับลากเส้นโยงความสัมพันธ์ -->
+        <svg id="tree-lines"></svg>
+        <!-- บล็อกกล่องรายชื่อญาติจะถูกเพิ่มเข้ามาในนี้ด้วย JavaScript -->
+        <div id="tree-nodes"></div>
+    </div>
+
+    <script type="module">
+        // 1. นำเข้าระบบคำนวณพิกัดที่คุณแยกไฟล์ไว้
+        import { VFT } from './family-tree-core.js';
+
+        // URL ดัดแปลงเพื่อดึงข้อมูลจาก Google Sheets ของคุณออกมาเป็น CSV โดยตรง
+        const sheetUrl = 'https://google.com';
+
+        // ฟังก์ชันช่วยดาวน์โหลดและแกะข้อความ CSV ให้กลายเป็นโครงสร้างแถวตาราง
+        async function fetchGoogleSheet(url) {
+            const response = await fetch(url);
+            const text = await response.text();
+            
+            // แยกข้อมูลทีละบรรทัด
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line !== "");
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                const currentLine = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                if (currentLine.length < headers.length) continue;
+                
+                const rowObj = {};
+                headers.forEach((header, index) => {
+                    rowObj[header] = currentLine[index];
+                });
+                rows.push(rowObj);
+            }
+            return rows;
+        }
+
+        // ฟังก์ชันแปลงข้อมูลตาราง Excel เป็นโครงสร้าง JSON Object ที่ตรรกะ Family Echo เข้าใจ
+        function transformData(rows) {
+            const familyData = {};
+            
+            rows.forEach(row => {
+                if (!row.id) return;
+                familyData[row.id] = {
+                    n: row.name,
+                    g: row.gender === 'ช' ? 'm' : 'f',
+                    m1: row.father ? String(row.father) : undefined,
+                    f1: row.mother ? String(row.mother) : undefined,
+                    pc: []
+                };
+            });
+
+            rows.forEach(row => {
+                if (!row.id) return;
+                if (row.spouse) {
+                    const spouseIds = String(row.spouse).split('|');
+                    spouseIds.forEach(sId => {
+                        const childrenIds = rows
+                            .filter(r => 
+                                (String(r.father) === String(row.id) && String(r.mother) === String(sId)) ||
+                                (String(r.mother) === String(row.id) && String(r.father) === String(sId))
+                            )
+                            .map(r => String(r.id));
+
+                        familyData[row.id].pc.push({
+                            i: String(sId),
+                            c: childrenIds
+                        });
+                    });
+                }
+            });
+            return familyData;
+        }
+
+        // ฟังก์ชันหลักในการควบคุมหน้าจอและวาดภาพ
+        async function initTree() {
+            try {
+                // ดึงข้อมูลจากชีตจริง
+                const rawRows = await fetchGoogleSheet(sheetUrl);
+                const structuredData = transformData(rawRows);
+                
+                // สั่งประมวลผลตำแหน่งพิกัด (เริ่มคำนวณผังต้นไม้โดยใช้ ID: 1 "เภา" เป็นจุดเริ่มต้นรุ่นแรก)
+                const layout = VFT("all", structuredData, "1", "c", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
+                
+                if (!layout) {
+                    document.getElementById('loading').innerText = "ไม่สามารถคำนวณโครงสร้างเครือญาติได้ ตรวจสอบความถูกต้องของความสัมพันธ์ในชีต";
+                    return;
+                }
+
+                // ซ่อนข้อความโหลดดิ้ง และแสดงพื้นที่กระดาน
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('tree-container').style.display = 'block';
+
+                const nodesContainer = document.getElementById('tree-nodes');
+                const svgContainer = document.getElementById('tree-lines');
+
+                // 2. ขีดเส้นความสัมพันธ์ตามพิกัด (layout.l) ที่ได้มาจากฟังก์ชัน if-else ในไฟล์แกนหลัก
+                let svgHtml = '';
+                layout.l.forEach(line => {
+                    // กำหนดสีของเส้น (สีเทาสำหรับสายเลือดทั่วไป สีแดงสำหรับความสัมพันธ์แต่งงาน)
+                    const strokeColor = line.c === '#ff0000' ? '#e91e63' : '#a0aec0';
+                    const strokeWidth = line.c === '#ff0000' ? '3' : '2';
+                    const strokeDash = line.c === '#ff0000' ? '4,4' : 'none'; // เส้นประสำหรับคู่สมรส
+
+                    svgHtml += `<line x1="${line.x}" y1="${line.y}" x2="${line.x + line.w}" y2="${line.y + line.h}" 
+                                     style="stroke:${strokeColor}; stroke-width:${strokeWidth}; stroke-dasharray:${strokeDash};" />`;
+                });
+                svgContainer.innerHTML = svgHtml;
+
+                // 3. วาดกล่องรายชื่อญาติ (layout.b) ตามจุดพิกัดในพื้นที่
+                layout.b.forEach(box => {
+                    const memberId = box.id;
+                    const genderClass = structuredData[memberId]?.g === 'f' ? 'gender-f' : 'gender-m';
+
+                    const div = document.createElement('div');
+                    div.className = `member-box ${genderClass}`;
+                    // ปรับตำแหน่งและขนาด (บวก Margin/Offset เพื่อความสมดุลบนหน้าเว็บ)
+                    div.style.left = `${box.x}px`;
+                    div.style.top = `${box.y}px`;
+                    div.style.width = `${box.w}px`;
+                    div.style.height = `${box.h}px`;
+
+                    div.innerHTML = `
+                        <div>${box.p}</div>
+                        <div class="member-id">ID: ${memberId}</div>
+                    `;
+                    nodesContainer.appendChild(div);
+                });
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loading').innerText = "เกิดข้อผิดพลาดในการโหลดข้อมูล: " + error.message;
+            }
+        }
+
+        // เริ่มต้นการทำงานเมื่อหน้าจอโหลดพร้อมเสร็จสิ้น
+        window.addEventListener('DOMContentLoaded', initTree);
+    </script>
+</body>
+</html>
