@@ -99,31 +99,41 @@
         // 1. นำเข้าระบบคำนวณพิกัดที่คุณแยกไฟล์ไว้
         import { VFT } from './family-tree-core.js';
 
-        // URL ดัดแปลงเพื่อดึงข้อมูลจาก Google Sheets ของคุณออกมาเป็น CSV โดยตรง
-        const sheetUrl = 'https://google.com';
+       // 1. เปลี่ยน URL ตัวแปรลิงก์ชีตใหม่ (ใช้การ Export ฟอร์แมตแทนการ Publish)
+const sheetUrl = 'https://google.com';
 
-        // ฟังก์ชันช่วยดาวน์โหลดและแกะข้อความ CSV ให้กลายเป็นโครงสร้างแถวตาราง
-        async function fetchGoogleSheet(url) {
-            const response = await fetch(url);
-            const text = await response.text();
-            
-            // แยกข้อมูลทีละบรรทัด
-            const lines = text.split('\n').map(line => line.trim()).filter(line => line !== "");
-            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-            
-            const rows = [];
-            for (let i = 1; i < lines.length; i++) {
-                const currentLine = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-                if (currentLine.length < headers.length) continue;
-                
-                const rowObj = {};
-                headers.forEach((header, index) => {
-                    rowObj[header] = currentLine[index];
-                });
-                rows.push(rowObj);
-            }
-            return rows;
-        }
+// 2. ปรับปรุงฟังก์ชันดาวน์โหลดไฟล์ให้เสถียรและรองรับการแกะข้อความภาษาไทย
+async function fetchGoogleSheet(url) {
+    // กำหนดรายละเอียดการดึงข้อมูลไม่ให้ติดแคชของเบราว์เซอร์
+    const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+    
+    if (!response.ok) {
+        throw new Error(`เซิร์ฟเวอร์ตอบกลับด้วยสถานะ: ${response.status}`);
+    }
+    
+    const text = await response.text();
+    
+    // แยกข้อมูลทีละบรรทัด และกรองบรรทัดว่างออก
+    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line !== "");
+    if (lines.length === 0) throw new Error("ไม่พบข้อมูลใดๆ ในไฟล์ที่ดาวน์โหลดมา");
+
+    // แกะหัวตาราง (ID, Name, Father...)
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+        // ใช้ Regex เพื่อช่วยแยกคอมมาอย่างแม่นยำ ป้องกันปัญหาหากในช่องชื่อมีเว้นวรรค
+        const currentLine = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+        const cleanedValues = currentLine.map(v => v.trim().replace(/"/g, ''));
+        
+        const rowObj = {};
+        headers.forEach((header, index) => {
+            rowObj[header] = cleanedValues[index] || "";
+        });
+        rows.push(rowObj);
+    }
+    return rows;
+}
 
         // ฟังก์ชันแปลงข้อมูลตาราง Excel เป็นโครงสร้าง JSON Object ที่ตรรกะ Family Echo เข้าใจ
         function transformData(rows) {
