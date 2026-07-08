@@ -1,5 +1,5 @@
 // ==========================================================================
-// family-tree-core.js (ชุดเต็มสำหรับการจัดโครงสร้างและคำนวณสายสัมพันธ์)
+// family-tree-core.js (เวอร์ชันปรับปรุงความแม่นยำ ล็อกตำแหน่งพ่อแม่-ลูก)
 // ==========================================================================
 
 function TAL(a, t, x, y, w, h, c) {
@@ -12,224 +12,164 @@ function TAE(a, t, x, y, w, h, c, p, id) {
     a.push({ t: t, x: x, y: y, w: w, h: h, c: c, p: p, id: id });
 }
 
-var Vvl = false;
-var V_f, V_i, V_ch, V_ph, V_oh, V_fl, V_pg, V_zf, V_hr, V_md, V_sp, V_ar, V_rm;
-var V_nd, V_ne, V_np, V_nq;
-
 export function VFT(em, f, i, m, ch, ph, oh, fp, fl, pg, zf, hr, md, sp, ar, rm) {
-    V_f = f; V_i = i; V_ch = ch; V_ph = ph; V_oh = oh; V_fl = fl; V_pg = pg; V_zf = zf; V_hr = hr; V_md = md; V_sp = sp; V_ar = ar; V_rm = rm;
-    var p = f[i]; if (!p) return null;
     var r = { b: [], l: [], w: 0, h: 0, xc: 0, yc: 0, bl: {}, ll: [] };
-    V_nd = {}; V_ne = {}; V_np = {}; V_nq = {};
     
-    var h = 0;
-    if (em == "all") h = VGD(r, i, m, 0, 0, fp, {});
-    else h = VBD(r, i, m, fp);
+    // บล็อกนี้จะคำนวณ Generation (ระดับชั้น Y) และวางลำดับพี่น้องแบบจับกลุ่มครอบครัว
+    var positions = {};
+    var visited = {};
     
-    if (h < 0) return null;
-    VMB(r);
-    VDP(r);
-    return r;
-}
-
-function VGD(r, i, m, y, x, fp, vd) {
-    var p = V_f[i]; if (!p || vd[i]) return -1;
-    vd[i] = true;
-    var h = y;
-    VND(r, i, y, x);
-    
-    if (m == "p") {
-        if (p.m1) h = Math.max(h, VGD(r, p.m1, "p", y - 1, x, fp, vd));
-        if (p.f1) h = Math.max(h, VGD(r, p.f1, "p", y - 1, x, fp, vd));
-    } else {
-        var pc = p.pc || [];
-        for (var k = 0; k < pc.length; k++) {
-            var s = pc[k];
-            if (s.i && !vd[s.i]) VND(r, s.i, y, x + (k + 1) * 0.5);
-            var cc = s.c || [];
-            for (var j = 0; j < cc.length; j++) {
-                h = Math.max(h, VGD(r, cc[j], "c", y + 1, x + j, fp, vd));
-            }
-        }
-    }
-    
-    // ดึงเครือญาติสายตรงที่เหลือมาคำนวณตำแหน่งพื้นฐานร่วมด้วย
-    if (p.m1 && !vd[p.m1]) h = Math.max(h, VGD(r, p.m1, "p", y - 1, x - 1, fp, vd));
-    if (p.f1 && !vd[p.f1]) h = Math.max(h, VGD(r, p.f1, "p", y - 1, x + 1, fp, vd));
-    
-    return h;
-}
-
-function VND(r, i, y, x) {
-    if (!V_nd[y]) V_nd[y] = [];
-    if (!V_ne[i]) {
-        var n = { i: i, y: y, x: x, w: 1, h: 1 };
-        V_nd[y].push(n);
-        V_ne[i] = n;
-    }
-}
-
-function VBD(r, i, m, fp) {
-    var p = V_f[i]; if (!p) return -1;
-    var y = 0; VND(r, i, y, 0);
-    return y;
-}
-
-function VMB(r) {
-    // ระบบคำนวณและกระจายพิกัด X ของกล่องในระนาบเดียวกันเพื่อป้องกันไม่ให้กล่องซ้อนทับกัน
-    for (var y in V_nd) {
-        var row = V_nd[y];
-        row.sort(function(a, b) { return a.x - b.x; });
+    // ตั้งต้นระดับชั้นความสูง (Y-Axis)
+    function assignLevels(currentId, currentLevel) {
+        if (!currentId || visited[currentId]) return;
+        visited[currentId] = true;
         
-        var minGap = 160; // ระยะห่างแนวนอนขั้นต่ำระหว่างศูนย์กลางกล่อง
-        for (var k = 0; k < row.length; k++) {
-            if (k === 0) {
-                row[k].calculatedX = row[k].x * 120;
-            } else {
-                var prevX = row[k-1].calculatedX;
-                var targetX = row[k].x * 120;
-                if (targetX < prevX + minGap) {
-                    row[k].calculatedX = prevX + minGap;
-                } else {
-                    row[k].calculatedX = targetX;
-                }
+        if (!positions[currentLevel]) positions[currentLevel] = [];
+        if (!positions[currentLevel].includes(currentId)) {
+            positions[currentLevel].push(currentId);
+        }
+        
+        var person = f[currentId];
+        if (!person) return;
+        
+        // พาคู่สมรสขึ้นมาอยู่ระดับชั้นเดียวกันทันที
+        var pc = person.pc || [];
+        pc.forEach(s => {
+            if (!positions[currentLevel].includes(s.i)) {
+                positions[currentLevel].push(s.i);
             }
-        }
-    }
-}
-
-function VDP(r) {
-    var minX = Infinity;
-    var minY = Infinity;
-    
-    // ค้นหาขอบเขตพิกัดต่ำสุดเพื่อเซ็ตระยะชิดซ้าย-บนให้สมดุล
-    for (var y in V_nd) {
-        var row = V_nd[y];
-        for (var k = 0; k < row.length; k++) {
-            var n = row[k];
-            var finalX = n.calculatedX;
-            var finalY = n.y * 140;
-            if (finalX < minX) minX = finalX;
-            if (finalY < minY) minY = finalY;
-        }
-    }
-    
-    var offsetX = (minX !== Infinity && minX < 0) ? Math.abs(minX) + 50 : 50;
-    var offsetY = (minY !== Infinity && minY < 0) ? Math.abs(minY) + 50 : 50;
-
-    // ลูปหลักสั่งบันทึกพิกัดตำแหน่งกล่องและส่งต่อไปยังฟังก์ชันลากเส้น
-    for (var y in V_nd) {
-        var row = V_nd[y];
-        for (var k = 0; k < row.length; k++) {
-            var n = row[k];
-            var p = V_f[n.i];
-            var txt = p.n || "ไม่มีชื่อ";
-            
-            var posX = n.calculatedX + offsetX;
-            var posY = n.y * 140 + offsetY;
-            
-            // บันทึกตำแหน่งกล่องลงในตัวแปรสำหรับเอาไปเรนเดอร์เป็น div หน้าเว็บ
-            TAE(r.b, "box", posX, posY, 110, 60, "#ffffff", txt, n.i);
-            
-            var pc = p.pc || [];
-            if (pc.length > 0) {
-                VCL(r, n, pc, offsetX, offsetY);
-            }
-        }
-    }
-}
-
-function VCL(r, n, pc, offsetX, offsetY) {
-    var x1 = n.calculatedX + offsetX + 55; // จุดกึ่งกลางกล่องต้นทาง X
-    var y1 = n.y * 140 + offsetY + 30;     // จุดกึ่งกลางกล่องต้นทาง Y
-    
-    for (var k = 0; k < pc.length; k++) {
-        var s = pc[k];
-        var sp = V_ne[s.i];
-        if (sp) {
-            var x2 = sp.calculatedX + offsetX + 55;
-            var y2 = sp.y * 140 + offsetY + 30;
-            
-            // if-else ตรวจสอบประเภทคู่สมรสและลูกเพื่อแยกสไตล์การโยงเส้น
-            if (y1 === y2) {
-                // กรณีที่เป็นคู่สมรส (ระนาบเดียวกัน) ลากเส้นประเชื่อมตรงกันตรงกลาง
-                var startX = Math.min(x1, x2) + 55;
-                var lineW = Math.abs(x1 - x2) - 110;
-                if (lineW > 0) {
-                    TAL(r.l, "line", startX, y1, lineW, 0, "#ff0000"); // สีแดงสำหรับคู่ครอง
-                }
-                
-                // คำนวณเส้นหักมุมลากเชื่อมจากคู่สมรสลงไปหาลูก ๆ (ถ้ามีลูก)
-                var cc = s.c || [];
-                if (cc.length > 0) {
-                    var midX = (x1 + x2) / 2;
-                    var branchY = y1 + 45; // จุดพักเส้นแนวนอนกึ่งกลางระหว่างรุ่น
-                    
-                    // เส้นหลักลากลงมาจากจุดกึ่งกลางคู่ครอง
-                    TAL(r.l, "line", midX, y1, 0, 45, "#888888");
-                    
-                    var firstChildX = Infinity;
-                    var lastChildX = -Infinity;
-                    var childBoxes = [];
-                    
-                    cc.forEach(cId => {
-                        var cp = V_ne[cId];
-                        if (cp) {
-                            var cx = cp.calculatedX + offsetX + 55;
-                            var cy = cp.y * 140 + offsetY;
-                            if (cx < firstChildX) firstChildX = cx;
-                            if (cx > lastChildX) lastChildX = cx;
-                            childBoxes.push({ x: cx, y: cy });
-                        }
-                    });
-                    
-                    // ลากเส้นแนวนอนกระจายกิ่งไปตามพิกัดของลูกทุกคน
-                    if (childBoxes.length > 0) {
-                        TAL(r.l, "line", firstChildX, branchY, lastChildX - firstChildX, 0, "#888888");
-                        // ลากเส้นแนวดิ่งเจาะลงหัวกล่องของลูกแต่ละคน
-                        childBoxes.forEach(cb => {
-                            TAL(r.l, "line", cb.x, branchY, 0, cb.y - branchY, "#888888");
-                        });
+            // พาลูกลงไปชั้นถัดไป
+            var cc = s.c || [];
+            cc.forEach(cId => assignLevels(cId, currentLevel + 1));
+        });
+        
+        // พาพี่น้องคนอื่นที่มาจากพ่อแม่เดียวกันขึ้นมาระดับเดียวกัน
+        if (person.m1 || person.f1) {
+            for (var id in f) {
+                if ((f[id].m1 === person.m1 && f[id].m1) || (f[id].f1 === person.f1 && f[id].f1)) {
+                    if (!positions[currentLevel].includes(id)) {
+                        positions[currentLevel].push(id);
                     }
                 }
             }
         }
     }
-}
+    
+    // รันการจัดชั้นจาก ID หลัก (เภา)
+    assignLevels("1", 0);
+    
+    // จัดกลุ่มพิกัด X แบบสัมพันธ์กัน (ล็อกพ่อแม่เคียงข้างกัน และลูกอยู่ตรงกลางใต้คู่สมรส)
+    var finalCoordinates = {};
+    var currentXOffset = {};
+    
+    // ไล่จัดลำดับจากชั้นบนลงล่างอย่างเป็นระบบ
+    var levels = Object.keys(positions).sort((a, b) => a - b);
+    
+    levels.forEach(lvl => {
+        var idsInLevel = positions[lvl];
+        var xStart = 50;
+        
+        idsInLevel.forEach(id => {
+            if (finalCoordinates[id]) return; // จัดพิกัดไปแล้วข้าม
+            
+            var person = f[id];
+            // ถ้าคนนี้มีพ่อแม่ ให้พยายามคำนวณตำแหน่ง X ให้อยู่กึ่งกลางใต้พ่อแม่ก่อน
+            if (person && (person.m1 || person.f1)) {
+                var p1X = finalCoordinates[person.m1] ? finalCoordinates[person.m1].x : null;
+                var p2X = finalCoordinates[person.f1] ? finalCoordinates[person.f1].x : null;
+                if (p1X !== null && p2X !== null) {
+                    xStart = (p1X + p2X) / 2;
+                } else if (p1X !== null) {
+                    xStart = p1X;
+                } else if (p2X !== null) {
+                    xStart = p2X;
+                }
+            }
+            
+            // เช็กไม่ให้ทับกับกล่องก่อนหน้าในระดับเดียวกัน
+            if (currentXOffset[lvl] && xStart < currentXOffset[lvl] + 160) {
+                xStart = currentXOffset[lvl] + 160;
+            }
+            
+            finalCoordinates[id] = { x: xStart, y: lvl * 160 + 50 };
+            currentXOffset[lvl] = xStart;
+            
+            // ดึงคู่สมรสมาวางไว้ข้างๆ ทันที
+            if (person && person.pc) {
+                person.pc.forEach(s => {
+                    if (!finalCoordinates[s.i]) {
+                        xStart += 160;
+                        finalCoordinates[s.i] = { x: xStart, y: lvl * 160 + 50 };
+                        currentXOffset[lvl] = xStart;
+                    }
+                });
+            }
+        });
+    });
 
-function VVR(hs, y, x1, x2) {
-    if (x1 > x2) { var t = x1; x1 = x2; x2 = t; }
-    if (!hs[y]) return false;
-    for (var k = 0; k < hs[y].length; k++) {
-        var h = hs[y][k];
-        if (h.x1 < x2 && h.x2 > x1) return true;
+    // สั่งบันทึกพิกัดกล่องส่งไปเรนเดอร์ใน index.html
+    for (var id in finalCoordinates) {
+        var p = f[id];
+        if (p) {
+            TAE(r.b, "box", finalCoordinates[id].x, finalCoordinates[id].y, 110, 60, "#ffffff", p.n, id);
+        }
     }
-    return false;
-}
 
-function VVV(hs, y, x1, x2) {
-    if (x1 > x2) { var t = x1; x1 = x2; x2 = t; }
-    if (!hs[y]) hs[y] = [];
-    hs[y].push({ x1: x1, x2: x2 });
-}
-
-function VAH(hs, y, x1, x2) {
-    if (x1 == x2) return y;
-    var d = 0;
-    while (VVR(hs, y + d, x1, x2)) { d += 4; }
-    VVV(hs, y + d, x1, x2);
-    return y + d;
-}
-
-function VAV(vs, x, y1, y2) {
-    if (y1 > y2) { var t = y1; y1 = y2; y2 = t; }
-    if (!vs[x]) vs[x] = [];
-    vs[x].push({ y1: y1, y2: y2 });
-}
-
-function VFC(hs, y1, y2, x) {
-    for (var y = y1; y <= y2; y++) {
-        if (VVR(hs, y, x, x)) return true;
+    // คำนวณขีดเส้นโยงความสัมพันธ์ใหม่ทั้งหมดตามตำแหน่งพิกัดที่แท้จริง
+    for (var id in f) {
+        var person = f[id];
+        if (!person || !finalCoordinates[id]) continue;
+        
+        var pc = person.pc || [];
+        pc.forEach(s => {
+            if (!finalCoordinates[s.i]) return;
+            
+            var x1 = finalCoordinates[id].x + 55;
+            var y1 = finalCoordinates[id].y + 30;
+            var x2 = finalCoordinates[s.i].x + 55;
+            var y2 = finalCoordinates[s.i].y + 30;
+            
+            // ลากเส้นเชื่อมระหว่างคู่สมรส (เส้นสีแดงจุดประ)
+            var startSpouseX = Math.min(x1, x2) + 55;
+            var spouseLineW = Math.abs(x1 - x2) - 110;
+            if (spouseLineW > 0) {
+                TAL(r.l, "line", startSpouseX, y1, spouseLineW, 0, "#ff0000");
+            }
+            
+            // ลากเส้นกิ่งแยกหักศรลงไปหาลูกๆ ทุกคนที่เกิดจากคู่นี้
+            var cc = s.c || [];
+            if (cc.length > 0) {
+                var midSpouseX = (x1 + x2) / 2;
+                var branchY = y1 + 50; // ระดับชั้นพักเส้นแนวนอน
+                
+                // ลากจากจุดกึ่งกลางคู่รักลงมาหาทางแยก
+                TAL(r.l, "line", midSpouseX, y1, 0, 50, "#888888");
+                
+                var minChildX = Infinity;
+                var maxChildX = -Infinity;
+                var validChildren = [];
+                
+                cc.forEach(cId => {
+                    if (finalCoordinates[cId]) {
+                        var cx = finalCoordinates[cId].x + 55;
+                        var cy = finalCoordinates[cId].y;
+                        if (cx < minChildX) minChildX = cx;
+                        if (cx > maxChildX) maxChildX = cx;
+                        validChildren.push({ x: cx, y: cy });
+                    }
+                });
+                
+                if (validChildren.length > 0) {
+                    // ขีดทางแยกแนวนอน
+                    TAL(r.l, "line", minChildX, branchY, maxChildX - minChildX, 0, "#888888");
+                    // ขีดเจาะหัวกล่องลูกแต่ละคน
+                    validChildren.forEach(cb => {
+                        TAL(r.l, "line", cb.x, branchY, 0, cb.y - branchY, "#888888");
+                    });
+                }
+            }
+        });
     }
-    return false;
+
+    return r;
 }
