@@ -20,16 +20,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             margin: 20px auto;
         }
-        /* เปิดแผ่น SVG กางเต็มหน้าจอ ลอยอยู่หน้าสุด */
-        #svg-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 1400px;
-            height: 700px;
-            z-index: 10; 
-            pointer-events: none;
-        }
         .person-box {
             position: absolute;
             width: 150px;
@@ -42,19 +32,33 @@
             font-weight: bold;
             font-size: 14px;
             color: #2f3640;
-            z-index: 5;
             background-color: #ffffff; 
         }
         .male { border: 3px solid #00a8ff; }
         .female { border: 3px solid #e17055; }
+
+        /* 🛠️ เปลี่ยนมาใช้วิธีสร้างเส้นด้วย CSS Div การันตีขึ้น 100% ทุกบราวเซอร์ */
+        .css-line {
+            position: absolute;
+            background-color: #2d3436; /* สีเส้นปกติ */
+            pointer-events: none;
+        }
+        /* เส้นประสีแดงสำหรับหย่าร้าง */
+        .css-line-divorced {
+            position: absolute;
+            border-top: 4px dashed #ff7675;
+            background-color: transparent !important;
+            height: 0px !important;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
-    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขลอจิกเส้นแยกสาขา การันตีเส้นขึ้นชัวร์)</h2>
+    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (เวอร์ชันการันตีเส้นขึ้น 100% ด้วย CSS)</h2>
     
     <div id="tree-container">
-        <svg id="svg-layer" width="1400" height="700" viewBox="0 0 1400 700" xmlns="http://w3.org"></svg>
+        <!-- ลบแผ่น SVG ออกไปเลย ตัดปัญหาจุดบอด -->
     </div>
 
     <script>
@@ -116,7 +120,6 @@
         const centerY = 150;  
 
         const container = document.getElementById('tree-container');
-        const svgLayer = document.getElementById('svg-layer');
 
         function createBox(name, x, y, gender) {
             const box = document.createElement('div');
@@ -127,42 +130,64 @@
             container.appendChild(box);
         }
 
-        // 🛠️ รื้อระบบวาดเส้นใหม่: การันตีการขึ้นรูปทรงอิสระ ไม่เกิดบั๊กพิกัดซ้ำเป็นจุดบอด
-        function drawLine(x1, y1, x2, y2, isDivorced, lineType) {
-            const path = document.createElementNS('http://w3.org', 'path');
-            let dValue = "";
+        // ฟังก์ชันวาดเส้นด้วยพลัง HTML/CSS ล้วนๆ (หมดปัญหาบราวเซอร์บล็อก)
+        function drawCssLine(x1, y1, x2, y2, isDivorced, lineType) {
+            const midY = y1 + (y2 - y1) / 2;
 
             if (lineType === "spouse") {
-                // ลอจิกเส้นคู่รัก: ลากจากขอบกล่องหนึ่ง ขยับหักหลบระดับแนวนอนกึ่งกลางชั้น ไปชนขอบอีกกล่องพอดี
+                // ลากคานแนวนอนเชื่อมคู่สมรสหักหลบกึ่งกลางชั้น
                 const startX = (x2 > x1) ? x1 + 75 : x1 - 75;
                 const endX = (x2 > x1) ? x2 - 75 : x2 + 75;
-                const midY = y1 + (y2 - y1) / 2;
-                dValue = `M ${startX} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${endX} ${y2}`;
+                
+                const line = document.createElement('div');
+                line.className = isDivorced ? 'css-line-divorced' : 'css-line';
+                
+                // คำนวณขอบเขตแบบพิกเซลตรงๆ
+                const minX = Math.min(startX, endX);
+                const width = Math.abs(startX - endX);
+                
+                line.style.left = `${minX}px`;
+                line.style.top = `${midY}px`;
+                line.style.width = `${width}px`;
+                if (!isDivorced) line.style.height = `4px`;
+                
+                container.appendChild(line);
             } else if (lineType === "to-child") {
-                // ลอจิกเส้นดิ่งหาลูก: ลากจากคานเชื่อมลงมาตรงๆ แล้วหักฉากแยกสาขาแนวราบ ก่อนจะดิ่งเข้าขอบบนกล่องลูก (y2 - 30)
-                const midY = y1 + (y2 - y1) / 2;
-                dValue = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2 - 30}`;
-            }
+                // เส้นดิ่งลากโยงจากคานลงมาหาตัวลูก
+                // 1. เส้นดิ่งจากคานบนลงมาจุดกึ่งกลางชั้น
+                const verticalLine1 = document.createElement('div');
+                verticalLine1.className = 'css-line';
+                verticalLine1.style.left = `${x1}px`;
+                verticalLine1.style.top = `${y1}px`;
+                verticalLine1.style.width = `4px`;
+                verticalLine1.style.height = `${midY - y1}px`;
+                container.appendChild(verticalLine1);
 
-            path.setAttributeNS(null, 'd', dValue);
-            path.setAttributeNS(null, 'fill', 'none');
-            path.setAttributeNS(null, 'stroke-width', '4'); 
-            
-            if (isDivorced) {
-                path.setAttributeNS(null, 'stroke', '#ff7675'); 
-                path.setAttributeNS(null, 'stroke-dasharray', '8,8'); 
-            } else {
-                path.setAttributeNS(null, 'stroke', '#2d3436'); 
+                // 2. เส้นแนวนอนแจกสาขา
+                const horizontalLine = document.createElement('div');
+                horizontalLine.className = 'css-line';
+                const minX = Math.min(x1, x2);
+                const width = Math.abs(x1 - x2);
+                horizontalLine.style.left = `${minX}px`;
+                horizontalLine.style.top = `${midY}px`;
+                horizontalLine.style.width = `${width + 4}px`;
+                horizontalLine.style.height = `4px`;
+                container.appendChild(horizontalLine);
+
+                // 3. เส้นดิ่งจิ้มหัวกล่องลูก
+                const verticalLine2 = document.createElement('div');
+                verticalLine2.className = 'css-line';
+                verticalLine2.style.left = `${x2}px`;
+                verticalLine2.style.top = `${midY}px`;
+                verticalLine2.style.width = `4px`;
+                verticalLine2.style.height = `${(y2 - 30) - midY}px`;
+                container.appendChild(verticalLine2);
             }
-            
-            svgLayer.appendChild(path);
         }
 
         window.onload = function() {
             const fatherData = allFamilyData["father"];
-
             createBox(fatherData.name, centerX, centerY, fatherData.gender);
-
             const layout = calculateFamilyLayout(fatherData, allFamilyData);
 
             // วาดคู่สมรส
@@ -170,25 +195,20 @@
                 const pos = layout.spousePositions[spouseId];
                 const sX = centerX + (pos.x * scaleX);
                 const sY = centerY + (pos.y * scaleY);
-                
                 createBox(allFamilyData[spouseId].name, sX, sY, allFamilyData[spouseId].gender);
-                drawLine(centerX, centerY, sX, sY, pos.type === "divorced", "spouse");
+                drawCssLine(centerX, centerY, sX, sY, pos.type === "divorced", "spouse");
             });
 
-            // วาดลูกๆ 
+            // วาดลูกๆ
             Object.keys(layout.childrenPositions).forEach(childId => {
                 const pos = layout.childrenPositions[childId];
                 const cX = centerX + (pos.x * scaleX);
                 const cY = centerY + (pos.y * scaleY);
-                
                 createBox(allFamilyData[childId].name, cX, cY, allFamilyData[childId].gender);
                 
-                // หาจุดกึ่งกลางของแต่ละคู่รักแนวราบบนจอจริง
                 const realParentPivotX = centerX + (pos.parentConnectionX * scaleX);
-                // ดักจับคานเชื่อมให้อยู่ระดับกึ่งกลางชั้นพอดีสนิทเชื่อมกันไร้รอยโหว่
                 const realParentPivotY = centerY + (scaleY / 2); 
-                
-                drawLine(realParentPivotX, realParentPivotY, cX, cY, false, "to-child");
+                drawCssLine(realParentPivotX, realParentPivotY, cX, cY, false, "to-child");
             });
         };
     </script>
