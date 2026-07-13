@@ -149,17 +149,30 @@
         }
 
         // ฟังก์ชันสร้างเส้นเชื่อมแบบหักฉาก SVG
-        function drawLine(x1, y1, x2, y2, isDivorced) {
-            const path = document.createElementNS('http://w3.org', 'path');
-            const midY = y1 + (y2 - y1) / 2; // จุดหักเลี้ยวแนวราบกึ่งกลางชั้น
-            
-            // ลากเส้นแบบ Orthogonal (หักมุมฉากสไตล์ Family Tree)
-            const dValue = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
-            
-            path.setAttribute('d', dValue);
-            path.setAttribute('class', `tree-line ${isDivorced ? 'divorced-line' : ''}`);
-            svgLayer.appendChild(path);
-        }
+       // ฟังก์ชันสร้างเส้นเชื่อมแบบหักฉาก SVG (เวอร์ชันอัปเกรดรองรับ GitHub Pages)
+function drawLine(x1, y1, x2, y2, isDivorced) {
+    const path = document.createElementNS('http://w3.org', 'path');
+    const midY = y1 + (y2 - y1) / 2; // จุดหักเลี้ยวแนวราบกึ่งกลางชั้น
+    
+    // คำนวณเส้นหักมุมฉากสไตล์ Family Tree
+    const dValue = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+    
+    path.setAttribute('d', dValue);
+    
+    // ป้องกัน GitHub Pages บล็อก: ใส่สไตล์ควบคุมสีและความหนาลงไปในตัวเส้นตรงๆ แทนการพึ่งพา CSSภายนอก
+    if (isDivorced) {
+        path.setAttribute('stroke', '#e84118'); // เส้นประสีแดงสำหรับหย่าร้าง
+        path.setAttribute('stroke-width', '3');
+        path.setAttribute('stroke-dasharray', '6,6');
+    } else {
+        path.setAttribute('stroke', '#2f3640'); // เส้นทึบสีเทาเข้ม
+        path.setAttribute('stroke-width', '3');
+    }
+    path.setAttribute('fill', 'none'); // ห้ามเทสีถมในช่องว่างของเส้น
+    
+    svgLayer.appendChild(path);
+}
+
 
         // ================== 4. สั่งให้ระบบทำงานเมื่อโหลดหน้าจอสำเร็จ ==================
         window.onload = function() {
