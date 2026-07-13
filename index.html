@@ -20,15 +20,14 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             margin: 20px auto;
         }
-        /* ล็อกแผ่นใสให้กางครอบคลุมเต็มพื้นที่ container ชัดเจน */
+        /* 🛠️ แก้ไขจุดที่ 1: ย้าย SVG ไปไว้ด้านหลังกล่องข้อความ เพื่อไม่ให้เส้นทับหน้าตัวอักษร */
         #svg-layer {
             position: absolute;
             top: 0;
             left: 0;
             width: 1400px;
             height: 700px;
-            z-index: 10; /* ดันแผ่นเส้นลอยมาอยู่ชั้นหน้าสุด */
-            pointer-events: none;
+            z-index: 1; /* อยู่หลังสุด */
         }
         .person-box {
             position: absolute;
@@ -42,8 +41,9 @@
             font-weight: bold;
             font-size: 14px;
             color: #2f3640;
-            z-index: 5;
-            background-color: #ffffff;
+            z-index: 5; /* อยู่ข้างหน้าเส้น SVG */
+            /* 💡 ทริคเด็ด: ใช้พื้นหลังสีขาวทึบ เพื่อให้กล่องบังเส้นที่วิ่งมาจิ้มตรงกลางด้านหลังพอดี เส้นจะไม่โผล่มาทับหน้าตัวอักษร */
+            background-color: #ffffff; 
         }
         .male { border: 3px solid #00a8ff; }
         .female { border: 3px solid #e17055; }
@@ -51,11 +51,10 @@
 </head>
 <body>
 
-    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขระบบพิกัด SVG การันตีเส้นขึ้นชัวร์)</h2>
+    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขเส้นทับหน้ากล่องและรอยต่อแนบสนิท)</h2>
     
     <div id="tree-container">
-        <!-- บังคับประกาศรูปแบบมิติ SVG ชัดเจน -->
-        <svg id="svg-layer" width="1400" height="700" viewBox="0 0 1400 700" xmlns="http://www.w3.org/2000/svg"></svg>
+        <svg id="svg-layer" width="1400" height="700" viewBox="0 0 1400 700" xmlns="http://w3.org"></svg>
     </div>
 
     <script>
@@ -128,23 +127,24 @@
             container.appendChild(box);
         }
 
-        // 🛠️ ปรับปรุงแก้ไขฟังก์ชันลากเส้นครั้งใหญ่: อัดสไตล์ลง Attributes ของ Tag โดยตรง
-        function drawLine(x1, y1, x2, y2, isDivorced) {
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            const midY = y1 + (y2 - y1) / 2; 
+        // 🛠️ แก้ไขจุดที่ 2: ปรับลอจิกพิกัด SVG ให้เชื่อมต่อแนบสนิทไร้รอยต่อแหว่ง
+        function drawLine(x1, y1, x2, y2, isDivorced, isChildLine) {
+            const path = document.createElementNS('http://w3.org', 'path');
+            
+            // ใช้จุดหักมุมฉากเดียวกันเป๊ะๆ ที่ระดับความลึกครึ่งชั้น (y1 + 80) เพื่อให้เส้นลูกวิ่งชนเส้นพ่อแม่สนิทพอดี
+            const midY = isChildLine ? y1 : y1 + (y2 - y1) / 2; 
             
             const dValue = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
             
-            // ใช้คำสั่งควบคุมรูปแบบเรนเดอร์พื้นฐานที่บราวเซอร์ทุกค่ายต้องยอมรับ
             path.setAttributeNS(null, 'd', dValue);
             path.setAttributeNS(null, 'fill', 'none');
-            path.setAttributeNS(null, 'stroke-width', '4'); // เพิ่มความหนาเป็น 4px เพื่อให้เห็นเด่นชัด
+            path.setAttributeNS(null, 'stroke-width', '4'); 
             
             if (isDivorced) {
-                path.setAttributeNS(null, 'stroke', '#ff7675'); // สีแดงสว่างสำหรับเส้นประหย่าร้าง
+                path.setAttributeNS(null, 'stroke', '#ff7675'); 
                 path.setAttributeNS(null, 'stroke-dasharray', '8,8'); 
             } else {
-                path.setAttributeNS(null, 'stroke', '#2d3436'); // สีเทาเก้มสนิทสำหรับคู่สมรสปัจจุบัน
+                path.setAttributeNS(null, 'stroke', '#2d3436'); 
             }
             
             svgLayer.appendChild(path);
@@ -157,15 +157,17 @@
 
             const layout = calculateFamilyLayout(fatherData, allFamilyData);
 
+            // วาดและลากเส้นเชื่อมคู่สมรส (ตั้งค่าตัวแปรเป็นระนาบพ่อแม่)
             Object.keys(layout.spousePositions).forEach(spouseId => {
                 const pos = layout.spousePositions[spouseId];
                 const sX = centerX + (pos.x * scaleX);
                 const sY = centerY + (pos.y * scaleY);
                 
                 createBox(allFamilyData[spouseId].name, sX, sY, allFamilyData[spouseId].gender);
-                drawLine(centerX, centerY, sX, sY, pos.type === "divorced");
+                drawLine(centerX, centerY, sX, sY, pos.type === "divorced", false);
             });
 
+            // วาดและลากเส้นเชื่อมลูก (ปรับจุดพิกัดส่งค่าเริ่มต้นให้แนบสนิทกับเส้นแนวนอนด้านบน)
             Object.keys(layout.childrenPositions).forEach(childId => {
                 const pos = layout.childrenPositions[childId];
                 const cX = centerX + (pos.x * scaleX);
@@ -174,9 +176,10 @@
                 createBox(allFamilyData[childId].name, cX, cY, allFamilyData[childId].gender);
                 
                 const realParentPivotX = centerX + (pos.parentConnectionX * scaleX);
+                // ดึงจุดเริ่มต้นของเส้นดิ่งลูกให้เกาะจากคานแนวนอน (centerY + 80) ลงมาหาแถวลูกโดยตรง
                 const realParentPivotY = centerY + (scaleY / 2); 
                 
-                drawLine(realParentPivotX, realParentPivotY, cX, cY, false);
+                drawLine(realParentPivotX, realParentPivotY, cX, cY, false, true);
             });
         };
     </script>
