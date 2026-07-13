@@ -20,7 +20,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             margin: 20px auto;
         }
-        /* เอา SVG กลับมาไว้ด้านหน้าสุด เพื่อให้เส้นแสดงผลติดชัวร์ 100% */
+        /* เปิดแผ่น SVG กางเต็มหน้าจอ ลอยอยู่หน้าสุด */
         #svg-layer {
             position: absolute;
             top: 0;
@@ -51,7 +51,7 @@
 </head>
 <body>
 
-    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (เวอร์ชันสมบูรณ์: เส้นชนขอบกล่องแนบสนิท ไม่ทับอักษร)</h2>
+    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขลอจิกเส้นแยกสาขา การันตีเส้นขึ้นชัวร์)</h2>
     
     <div id="tree-container">
         <svg id="svg-layer" width="1400" height="700" viewBox="0 0 1400 700" xmlns="http://w3.org"></svg>
@@ -127,34 +127,23 @@
             container.appendChild(box);
         }
 
-        // 🛠️ อัปเกรดฟังก์ชันลากเส้นคำนวณการชนขอบกล่อง (Edge-to-Edge Clipping Algorithm)
+        // 🛠️ รื้อระบบวาดเส้นใหม่: การันตีการขึ้นรูปทรงอิสระ ไม่เกิดบั๊กพิกัดซ้ำเป็นจุดบอด
         function drawLine(x1, y1, x2, y2, isDivorced, lineType) {
             const path = document.createElementNS('http://w3.org', 'path');
-            
-            // หาจุดหักฉากกึ่งกลางระดับแนวราบระหว่างสองชั้นพอดี
-            let midY = y1 + (y2 - y1) / 2;
-            if (lineType === "to-child") {
-                midY = y1; // ให้เส้นดิ่งของลูกเกาะจากคานแนวนอนพอดีเป๊ะ
-            }
-
-            // --- ลอจิกแก้ปัญหาเส้นทับหน้าตัวอักษร: คำนวณจุดหยุดให้ตัดตรงขอบกล่องพอดี ---
-            let actualX1 = x1;
-            let actualY1 = y1;
-            let actualX2 = x2;
-            let actualY2 = y2;
+            let dValue = "";
 
             if (lineType === "spouse") {
-                // เส้นเชื่อมคู่สมรสแนวนอน: ให้หยุดห่างจากจุดศูนย์กลางกล่องข้างละ 75px (ขอบกล่องพอดี)
-                actualX1 = (x2 > x1) ? x1 + 75 : x1 - 75;
-                actualX2 = (x2 > x1) ? x2 - 75 : x2 + 75;
+                // ลอจิกเส้นคู่รัก: ลากจากขอบกล่องหนึ่ง ขยับหักหลบระดับแนวนอนกึ่งกลางชั้น ไปชนขอบอีกกล่องพอดี
+                const startX = (x2 > x1) ? x1 + 75 : x1 - 75;
+                const endX = (x2 > x1) ? x2 - 75 : x2 + 75;
+                const midY = y1 + (y2 - y1) / 2;
+                dValue = `M ${startX} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${endX} ${y2}`;
             } else if (lineType === "to-child") {
-                // เส้นดิ่งของลูก: ให้หัวเส้นเริ่มลากตรงใต้อ่างคานแนวนอน และปลายเส้นจบตรงขอบบนของกล่องลูก (ถอยขึ้นมา 30px)
-                actualY2 = y2 - 30;
+                // ลอจิกเส้นดิ่งหาลูก: ลากจากคานเชื่อมลงมาตรงๆ แล้วหักฉากแยกสาขาแนวราบ ก่อนจะดิ่งเข้าขอบบนกล่องลูก (y2 - 30)
+                const midY = y1 + (y2 - y1) / 2;
+                dValue = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2 - 30}`;
             }
 
-            // ลากเส้นพิกัดตามจุดที่คำนวณชดเชยขอบกล่องแล้ว
-            const dValue = `M ${actualX1} ${actualY1} L ${x1} ${midY} L ${x2} ${midY} L ${actualX2} ${actualY2}`;
-            
             path.setAttributeNS(null, 'd', dValue);
             path.setAttributeNS(null, 'fill', 'none');
             path.setAttributeNS(null, 'stroke-width', '4'); 
@@ -176,7 +165,7 @@
 
             const layout = calculateFamilyLayout(fatherData, allFamilyData);
 
-            // วาดคู่สมรส และส่งประเภทเป็นเส้นเชื่อมคู่รัก "spouse" เพื่อคำนวณชนขอบซ้ายขวา
+            // วาดคู่สมรส
             Object.keys(layout.spousePositions).forEach(spouseId => {
                 const pos = layout.spousePositions[spouseId];
                 const sX = centerX + (pos.x * scaleX);
@@ -186,7 +175,7 @@
                 drawLine(centerX, centerY, sX, sY, pos.type === "divorced", "spouse");
             });
 
-            // วาดลูกๆ และส่งประเภทเป็นเส้นเชื่อมลูก "to-child" เพื่อคำนวณชนขอบบนล่าง และเชื่อมรอยต่อสนิท
+            // วาดลูกๆ 
             Object.keys(layout.childrenPositions).forEach(childId => {
                 const pos = layout.childrenPositions[childId];
                 const cX = centerX + (pos.x * scaleX);
@@ -194,7 +183,9 @@
                 
                 createBox(allFamilyData[childId].name, cX, cY, allFamilyData[childId].gender);
                 
+                // หาจุดกึ่งกลางของแต่ละคู่รักแนวราบบนจอจริง
                 const realParentPivotX = centerX + (pos.parentConnectionX * scaleX);
+                // ดักจับคานเชื่อมให้อยู่ระดับกึ่งกลางชั้นพอดีสนิทเชื่อมกันไร้รอยโหว่
                 const realParentPivotY = centerY + (scaleY / 2); 
                 
                 drawLine(realParentPivotX, realParentPivotY, cX, cY, false, "to-child");
