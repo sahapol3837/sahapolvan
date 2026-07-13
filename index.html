@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ผังครอบครัวของฉัน</title>
+    <style>
+        /* พื้นหลังหน้าเว็บและพื้นที่วาดผัง */
+        #tree-container {
+            position: relative;
+            width: 2000px;
+            height: 1000px;
+            background-color: #f9f9f9;
+        }
+        /* แผ่นใส SVG สำหรับวาดเส้น จะถูกซ้อนไว้ด้านหลังสุด */
+        #svg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        /* สไตล์ของกล่องข้อความบุคคล */
+        .person-box {
+            position: absolute;
+            width: 140px;
+            height: 60px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            font-weight: bold;
+            z-index: 2; /* อยู่เหนือกราฟเส้น SVG */
+        }
+        .male { background-color: #e3f2fd; border: 2px solid #2196f3; }
+        .female { background-color: #fce4ec; border: 2px solid #e91e63; }
+        
+        /* สไตล์ของเส้นเชื่อมโยง */
+        .tree-line { stroke: #555; stroke-width: 2; fill: none; }
+        .divorced-line { stroke-dasharray: 5,5; stroke: #e91e63; } /* เส้นประสำหรับคนหย่าร้าง */
+    </style>
+</head>
+<body>
+
+    <!-- พื้นที่แสดงผลผังครอบครัว -->
+    <div id="tree-container">
+        <svg id="svg-layer"></svg>
+    </div>
+
+    <!-- เชื่อมไฟล์ JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
