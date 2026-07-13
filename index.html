@@ -37,13 +37,11 @@
         .male { border: 3px solid #00a8ff; }
         .female { border: 3px solid #e17055; }
 
-        /* 🛠️ เปลี่ยนมาใช้วิธีสร้างเส้นด้วย CSS Div การันตีขึ้น 100% ทุกบราวเซอร์ */
         .css-line {
             position: absolute;
-            background-color: #2d3436; /* สีเส้นปกติ */
+            background-color: #2d3436; 
             pointer-events: none;
         }
-        /* เส้นประสีแดงสำหรับหย่าร้าง */
         .css-line-divorced {
             position: absolute;
             border-top: 4px dashed #ff7675;
@@ -55,11 +53,9 @@
 </head>
 <body>
 
-    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (เวอร์ชันการันตีเส้นขึ้น 100% ด้วย CSS)</h2>
+    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขเส้นแนวตั้งต่อสนิทกับคานพ่อแม่)</h2>
     
-    <div id="tree-container">
-        <!-- ลบแผ่น SVG ออกไปเลย ตัดปัญหาจุดบอด -->
-    </div>
+    <div id="tree-container"></div>
 
     <script>
         const allFamilyData = {
@@ -130,19 +126,16 @@
             container.appendChild(box);
         }
 
-        // ฟังก์ชันวาดเส้นด้วยพลัง HTML/CSS ล้วนๆ (หมดปัญหาบราวเซอร์บล็อก)
         function drawCssLine(x1, y1, x2, y2, isDivorced, lineType) {
             const midY = y1 + (y2 - y1) / 2;
 
             if (lineType === "spouse") {
-                // ลากคานแนวนอนเชื่อมคู่สมรสหักหลบกึ่งกลางชั้น
                 const startX = (x2 > x1) ? x1 + 75 : x1 - 75;
                 const endX = (x2 > x1) ? x2 - 75 : x2 + 75;
                 
                 const line = document.createElement('div');
                 line.className = isDivorced ? 'css-line-divorced' : 'css-line';
                 
-                // คำนวณขอบเขตแบบพิกเซลตรงๆ
                 const minX = Math.min(startX, endX);
                 const width = Math.abs(startX - endX);
                 
@@ -153,31 +146,30 @@
                 
                 container.appendChild(line);
             } else if (lineType === "to-child") {
-                // เส้นดิ่งลากโยงจากคานลงมาหาตัวลูก
-                // 1. เส้นดิ่งจากคานบนลงมาจุดกึ่งกลางชั้น
+                // 1. เส้นดิ่งจากใต้คานจุดกึ่งกลางพ่อแม่
                 const verticalLine1 = document.createElement('div');
                 verticalLine1.className = 'css-line';
-                verticalLine1.style.left = `${x1}px`;
+                verticalLine1.style.left = `${x1 - 2}px`; 
                 verticalLine1.style.top = `${y1}px`;
                 verticalLine1.style.width = `4px`;
                 verticalLine1.style.height = `${midY - y1}px`;
                 container.appendChild(verticalLine1);
 
-                // 2. เส้นแนวนอนแจกสาขา
+                // 2. เส้นคานแนวราบแจกแจงสาขา
                 const horizontalLine = document.createElement('div');
                 horizontalLine.className = 'css-line';
                 const minX = Math.min(x1, x2);
                 const width = Math.abs(x1 - x2);
-                horizontalLine.style.left = `${minX}px`;
+                horizontalLine.style.left = `${minX - 2}px`;
                 horizontalLine.style.top = `${midY}px`;
                 horizontalLine.style.width = `${width + 4}px`;
                 horizontalLine.style.height = `4px`;
                 container.appendChild(horizontalLine);
 
-                // 3. เส้นดิ่งจิ้มหัวกล่องลูก
+                // 3. เส้นแนวตั้งดิ่งปักเข้าหัวกล่องลูก
                 const verticalLine2 = document.createElement('div');
                 verticalLine2.className = 'css-line';
-                verticalLine2.style.left = `${x2}px`;
+                verticalLine2.style.left = `${x2 - 2}px`; 
                 verticalLine2.style.top = `${midY}px`;
                 verticalLine2.style.width = `4px`;
                 verticalLine2.style.height = `${(y2 - 30) - midY}px`;
@@ -190,7 +182,6 @@
             createBox(fatherData.name, centerX, centerY, fatherData.gender);
             const layout = calculateFamilyLayout(fatherData, allFamilyData);
 
-            // วาดคู่สมรส
             Object.keys(layout.spousePositions).forEach(spouseId => {
                 const pos = layout.spousePositions[spouseId];
                 const sX = centerX + (pos.x * scaleX);
@@ -199,7 +190,6 @@
                 drawCssLine(centerX, centerY, sX, sY, pos.type === "divorced", "spouse");
             });
 
-            // วาดลูกๆ
             Object.keys(layout.childrenPositions).forEach(childId => {
                 const pos = layout.childrenPositions[childId];
                 const cX = centerX + (pos.x * scaleX);
@@ -207,7 +197,10 @@
                 createBox(allFamilyData[childId].name, cX, cY, allFamilyData[childId].gender);
                 
                 const realParentPivotX = centerX + (pos.parentConnectionX * scaleX);
-                const realParentPivotY = centerY + (scaleY / 2); 
+                
+                // 🛠️ แก้ไขจุดตาย: เปลี่ยนจาก centerY + 80 ให้กลายเป็น centerY (150px) ตรงๆ เพื่อให้หัวเส้นวิ่งไปเกาะติดกับคานพ่อแม่สนิทร้อยเปอร์เซ็นต์
+                const realParentPivotY = centerY; 
+                
                 drawCssLine(realParentPivotX, realParentPivotY, cX, cY, false, "to-child");
             });
         };
