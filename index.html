@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <title>ผังครอบครัวของฉัน</title>
     <style>
-        /* จัดโครงสร้างพื้นฐานหน้าจอ */
         body {
             margin: 0;
             padding: 20px;
             background-color: #f5f6fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: sans-serif;
         }
-        
-        /* กล่องขอบข่ายผังครอบครัว */
         #tree-container {
             position: relative;
             width: 1400px;
@@ -22,21 +19,17 @@
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             margin: 20px auto;
-            overflow: hidden;
         }
-
-        /* 💡 จุดเปลี่ยนสำคัญ: ยกแผ่นใส SVG ให้ลอยมาอยู่ด้านหน้าสุด และตั้งค่าให้คลิกทะลุได้ */
+        /* ล็อกแผ่นใสให้กางครอบคลุมเต็มพื้นที่ container ชัดเจน */
         #svg-layer {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10; /* ขยับค่าให้สูงกว่ากล่องข้อความ เพื่อให้เส้นลอยเด่นขึ้นมาด้านบน */
-            pointer-events: none; /* บังคับให้เมาส์คลิกทะลุเส้นไปโดนกล่องข้อความด้านหลังได้ปกติ */
+            width: 1400px;
+            height: 700px;
+            z-index: 10; /* ดันแผ่นเส้นลอยมาอยู่ชั้นหน้าสุด */
+            pointer-events: none;
         }
-
-        /* สไตล์ของกล่องข้อความบุคคล */
         .person-box {
             position: absolute;
             width: 150px;
@@ -49,27 +42,23 @@
             font-weight: bold;
             font-size: 14px;
             color: #2f3640;
-            z-index: 5; /* อยู่ชั้นกลาง เพื่อให้เส้น SVG พาดทับเข้าสู่ใจกลางกล่องได้พอดี */
+            z-index: 5;
             background-color: #ffffff;
         }
-        
-        /* สีแยกเพศชายและหญิง */
-        .male { border: 3px solid #00a8ff; background-color: #f5f6fa; }
-        .female { border: 3px solid #e17055; background-color: #f5f6fa; }
+        .male { border: 3px solid #00a8ff; }
+        .female { border: 3px solid #e17055; }
     </style>
 </head>
 <body>
 
-    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขเลเยอร์เส้นแสดงผล)</h2>
+    <h2 style="text-align: center; color: #2f3640;">ผังครอบครัว (แก้ไขระบบพิกัด SVG การันตีเส้นขึ้นชัวร์)</h2>
     
-    <!-- คอนเทนเนอร์วาดผังครอบครัว -->
     <div id="tree-container">
-        <!-- แผ่นกระดาษสำหรับลากเส้นความสัมพันธ์ -->
-        <svg id="svg-layer"></svg>
+        <!-- บังคับประกาศรูปแบบมิติ SVG ชัดเจน -->
+        <svg id="svg-layer" width="1400" height="700" viewBox="0 0 1400 700" xmlns="http://www.w3.org/2000/svg"></svg>
     </div>
 
     <script>
-        // ================== 1. ข้อมูลครอบครัวฐานระบบ ==================
         const allFamilyData = {
             "father": {
                 name: "คุณพ่อ สมชาย",
@@ -86,13 +75,12 @@
             "child_3": { name: "ลูกเมียใหม่ (เล็ก)", gender: "male" }
         };
 
-        // ================== 2. LAYOUT ENGINE (ลอจิกถอดรหัสจาก Family Echo) ==================
         function calculateFamilyLayout(person, allFamilyData) {
             const layoutResult = { spousePositions: {}, childrenPositions: {} };
             const allPartners = person.relationships || []; 
             if (allPartners.length === 0) return layoutResult;
 
-            const baseGap = 2.0; // ขยายช่องไฟระหว่างกล่องคู่รัก
+            const baseGap = 2.2; 
             let leftOffset = -baseGap; 
             let rightOffset = baseGap;  
 
@@ -113,7 +101,7 @@
                     childrenOfThisCouple.forEach((childId) => {
                         layoutResult.childrenPositions[childId] = {
                             x: currentChildX,
-                            y: 1.5, // ดันเลเยอร์ลูกลงมาแถวล่าง
+                            y: 1.6, 
                             parentConnectionX: centerOfCoupleX
                         };
                         currentChildX += childSpacing;
@@ -123,59 +111,52 @@
             return layoutResult;
         }
 
-        // ================== 3. ฟังก์ชันสั่งสร้างกล่องและคำนวณเส้น SVG ==================
         const scaleX = 160;   
         const scaleY = 160;   
-        const centerX = 700;  // จุดศูนย์กลางสำหรับวาดตัวพ่อ (กึ่งกลางความกว้างคอนเทนเนอร์ 1400px)
+        const centerX = 700;  
         const centerY = 150;  
 
         const container = document.getElementById('tree-container');
         const svgLayer = document.getElementById('svg-layer');
 
-        // ฟังก์ชันวาดกล่องข้อความบุคคล
         function createBox(name, x, y, gender) {
             const box = document.createElement('div');
             box.className = `person-box ${gender}`;
-            box.style.left = `${x - 75}px`; // จัดสมดุลซ้าย (ความกว้างกล่อง 150px / 2)
-            box.style.top = `${y - 30}px`;  // จัดสมดุลบน (ความสูงกล่อง 60px / 2)
+            box.style.left = `${x - 75}px`; 
+            box.style.top = `${y - 30}px`;  
             box.innerHTML = name;
             container.appendChild(box);
         }
 
-        // ฟังก์ชันสร้างเส้นหักฉาก SVG โยงเข้าหาแกนกลางกล่องโดยตรง
+        // 🛠️ ปรับปรุงแก้ไขฟังก์ชันลากเส้นครั้งใหญ่: อัดสไตล์ลง Attributes ของ Tag โดยตรง
         function drawLine(x1, y1, x2, y2, isDivorced) {
-            const path = document.createElementNS('http://w3.org', 'path');
-            const midY = y1 + (y2 - y1) / 2; // คำนวณจุดหักเลี้ยวฉากกึ่งกลางระดับแนวราบ
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const midY = y1 + (y2 - y1) / 2; 
             
-            // ลากเส้นเป็นพิกัดมุมฉากสไตล์สารบัญเครือญาติ
             const dValue = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
-            path.setAttribute('d', dValue);
             
-            // บังคับกำหนดสไตล์ใส่เส้นโดยตรงเพื่อความเสถียรบนเซิร์ฟเวอร์
-            path.setAttribute('fill', 'none');
-            path.setAttribute('stroke-width', '3');
+            // ใช้คำสั่งควบคุมรูปแบบเรนเดอร์พื้นฐานที่บราวเซอร์ทุกค่ายต้องยอมรับ
+            path.setAttributeNS(null, 'd', dValue);
+            path.setAttributeNS(null, 'fill', 'none');
+            path.setAttributeNS(null, 'stroke-width', '4'); // เพิ่มความหนาเป็น 4px เพื่อให้เห็นเด่นชัด
             
             if (isDivorced) {
-                path.setAttribute('stroke', '#e74c3c'); // เส้นสีแดง
-                path.setAttribute('stroke-dasharray', '6,6'); // รูปแบบเส้นประสำหรับคู่รักที่เลิกรา
+                path.setAttributeNS(null, 'stroke', '#ff7675'); // สีแดงสว่างสำหรับเส้นประหย่าร้าง
+                path.setAttributeNS(null, 'stroke-dasharray', '8,8'); 
             } else {
-                path.setAttribute('stroke', '#2c3e50'); // เส้นทึบสีเทาเข้มสำหรับสถานะปกติ
+                path.setAttributeNS(null, 'stroke', '#2d3436'); // สีเทาเก้มสนิทสำหรับคู่สมรสปัจจุบัน
             }
             
             svgLayer.appendChild(path);
         }
 
-        // ================== 4. สั่งระบบทำงานทั้งหมดเมื่อหน้าจอพร้อม ==================
         window.onload = function() {
             const fatherData = allFamilyData["father"];
 
-            // 1. วาดพ่อไว้ตำแหน่งแกนกลางหลัก
             createBox(fatherData.name, centerX, centerY, fatherData.gender);
 
-            // 2. เรียกชุดลอจิกคณิตศาสตร์ถอดรหัสคำนวณตำแหน่งสัมพัทธ์
             const layout = calculateFamilyLayout(fatherData, allFamilyData);
 
-            // 3. วาดและโยงเส้นหาคู่รักทุกคน (แฟนเก่าไปฝั่งซ้ายเป็นเส้นประแดง / แฟนใหม่ไปฝั่งขวาเป็นเส้นทึบ)
             Object.keys(layout.spousePositions).forEach(spouseId => {
                 const pos = layout.spousePositions[spouseId];
                 const sX = centerX + (pos.x * scaleX);
@@ -185,7 +166,6 @@
                 drawLine(centerX, centerY, sX, sY, pos.type === "divorced");
             });
 
-            // 4. วาดและโยงเส้นหาลูกๆ โดยดึงเส้นดิ่งลงมาจากจุด Pivot กึ่งกลางของแต่ละคู่สมรส
             Object.keys(layout.childrenPositions).forEach(childId => {
                 const pos = layout.childrenPositions[childId];
                 const cX = centerX + (pos.x * scaleX);
@@ -193,7 +173,6 @@
                 
                 createBox(allFamilyData[childId].name, cX, cY, allFamilyData[childId].gender);
                 
-                // คำนวณจุดศูนย์ถ่วงกึ่งกลางของพ่อนั้นและแม่นั้นจริงบนผังหน้าจอ
                 const realParentPivotX = centerX + (pos.parentConnectionX * scaleX);
                 const realParentPivotY = centerY + (scaleY / 2); 
                 
